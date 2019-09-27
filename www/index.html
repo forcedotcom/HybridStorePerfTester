@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <link href="ratchet.css" rel="stylesheet">
+    <link href="ratchet-theme.css" rel="stylesheet">
+    <style>
+        body, .bar-nav {
+            top: env(safe-area-inset-top)
+        }
+    
+        .hidden {
+            display: none
+        }
+    
+        #divSettings input{
+            width: 7em
+        }
+    
+        #divSettings label {
+            display: block;
+            float: left;
+            width: 9em;
+        }
+    
+        html *
+        {
+           font-family: Courier !important;
+        }
+    </style>
+   <script src="cordova.js"></script>
+   <script src="app.js"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="bar bar-nav">
+        <h1 class="title" id="headerTitle">Console</h1>
+        <button class="btn btn-negative pull-left" id="btnReset">Reset</button>
+    </header>
+    
+    <div class="content">
+
+        <!-- Console -->
+        <ul id="ulConsole" class="table-view">
+        </ul>
+
+    </div>
+        
+    <!-- Bottom bar -->
+    <nav class="bar bar-footer">
+      <!-- Buttons for main screen -->
+      <button class="btn pull-left" id="btnBenchSmall">Small</button>
+      <button class="btn pull-left" id="btnBenchMedium">Medium</button>
+      <button class="btn pull-right" id="btnBenchExtraLarge">Extra Large</button>
+      <button class="btn pull-right" id="btnBenchLarge">Large</button>
+    </nav>
+</body>
+</html>
