@@ -1,102 +1,152 @@
 // Constants
-const STORE_CONFIG = {isGlobalStore:true}
+const TOTAL_SIZE = 1024*1024*8 // total number of characters (in leaf values) written and read during a benchmark
+
+// Store config for all soups
+const STORE_CONFIG =  {isGlobalStore:true}
+
+// Configuration for the test soups
 const SOUP_CONFIGS = {
-    internalString: {
+    intString: {
         soupSpec: {
-            name: "i_str",
+            name: "intString",
             features: []
         },
         indexSpecs: [{path:"key", type:"string"}]
     },
-    internalJson1: {
+    intJson1: {
         soupSpec: {
-            name: "i_json1",
+            name: "intJson1",
             features: []
         },
         indexSpecs: [{path:"key", type:"json1"}]
     },
-    externalString: {
+    extString: {
         soupSpec: {
-            name: "e_str",
+            name: "extString",
             features: ["externalStorage"]
         },
         indexSpecs: [{path:"key", type:"string"}]
     }
 }
 
-// Global variables
-var storeClient
+// Characters to use
+const MIN_CODE_POINT = 0x20
+const MAX_CODE_POINT = 0xFF
 
-// Sets up soup 
-// If soup already exists:
-// - if removeIfExist is true, the existing soup is removed and a new soup is created
-// - if removeIfExist is false, the existing soup is left alone
-function setupSoup(removeIfExist, soupConfig) {
+// Global variables
+var storeClient    // client to do smartstore operations
+var events = {}    // map of message to start time
+
+// Sets up a test soup
+function setupSoup(soupConfig) {
     var soupName = soupConfig.soupSpec.name
-    
-    var createSoup = () => {
-        log("Registering soup " + soupName, "blue")
-        return storeClient.registerSoupWithSpec(STORE_CONFIG, soupConfig.soupSpec, soupConfig.indexSpecs)
-            .then(() => { log("Registered soup " + soupName, "green") })
-    }
-    
-    return storeClient.soupExists(STORE_CONFIG, soupName)
-        .then((exists) => {
-            if (exists && removeIfExist) {
-                log("Removing soup " + soupName, "blue")
-                return storeClient.removeSoup(STORE_CONFIG, soupName)
-                    .then(() => {
-                        log("Removed soup " + soupName, "green")
-                        return createSoup()
-                    })
-            } else {
-                return createSoup()
-            }
+    var rmMsg = `rm ${soupName}`
+    var addMsg = `add ${soupName}`
+        
+    start(rmMsg)
+    return storeClient.removeSoup(STORE_CONFIG, soupName)
+        .then(() => {
+            end(rmMsg)
+            start(addMsg)
+            return storeClient.registerSoupWithSpec(STORE_CONFIG, soupConfig.soupSpec, soupConfig.indexSpecs)
+        })
+        .then(() => {
+            end(addMsg)
         })
 }
 
-function setupSoups(removeIfExist) {
-    log("Setting up soups", "blue")
-    setupSoup(removeIfExist, SOUP_CONFIGS.internalString)
-        .then(() => { setupSoup(removeIfExist, SOUP_CONFIGS.internalJson1) })
-        .then(() => { setupSoup(removeIfExist, SOUP_CONFIGS.externalStorage) })
+// Setup all test soups
+function setupSoups() {
+    var msg = "create soups"
+    start(msg)
+    return setupSoup(SOUP_CONFIGS.intString)
+        .then(() => { return setupSoup(SOUP_CONFIGS.intJson1) })
+        .then(() => { return setupSoup(SOUP_CONFIGS.extString) })
 }
 
 // Function invoked when a btnReset is pressed
 function onReset() {
     clearLog()
-    setupSoups(true)
+    setupSoups()
 }
 
 // Function invoked when a btnBench* is pressed
-function onBench(size) {
-    log("Benchmark " + size + " not implemented yet")
+function onBench(entrySize) {
+    var n = TOTAL_SIZE / entrySize
+    log(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
+
+    var entryShape = {
+        depth: 1,                      // depth of json objects
+        numberOfChildren: 16,          // number of branches at each level
+        keyLength: 128                 // length of keys
+    }
+    entryShape.valueLength = entrySize / Math.pow(entryShape.numberOfChildren, entryShape.depth) // length of leaf values
+
+    return insert(SOUP_CONFIGS.intString, entryShape, n)
+        .then(() => { return insert(SOUP_CONFIGS.extString, entryShape, n) })
+        .then(() => { return insert(SOUP_CONFIGS.intJson1, entryShape, n) })
+        // query with page size 1
+        .then(() => { return query(SOUP_CONFIGS.intString, n, 1) })
+        .then(() => { return query(SOUP_CONFIGS.extString, n, 1) })
+        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 1) })
+        // query with page size 4
+        .then(() => { return query(SOUP_CONFIGS.intString, n, 4) })
+        .then(() => { return query(SOUP_CONFIGS.extString, n, 4) })
+        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 4) })
+        // query with page size 16
+        .then(() => { return query(SOUP_CONFIGS.intString, n, 16) })
+        .then(() => { return query(SOUP_CONFIGS.extString, n, 16) })
+        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 16) })
+
 }
 
-/*
-// Function invoked when a btnBench is pressed
-function onBench(totalSize) {
-    COUNTS.map((count) => {
-        var settings = {
-            depth: 0,                      // depth of json objects
-            numberOfChildren: 1,           // number of branches at each level
-            keyLength: 100,                // length of keys
-            valueLength: totalSize/count,  // length of leaf values
-            minCodePoint: "20",            // smallest code point to use in random strings
-            maxCodePoint: "FF"             // largest code point to use in random strings
-        }
-
-        
-    })
+// Insert n entries with the given shape in the given soup
+function insert(soupConfig, entryShape, n) {
+    var soupName = soupConfig.soupSpec.name
+    start(`+ ${soupName}`)
+    return actualInsert(soupName, entryShape, n, 0)
 }
 
-function benchMark(soupConfig, entryShape, count) {
-    return insert(soupConfig, entryShape, count)
-        .then(queryAll(soupConfig, 
+// Helper for the insert(...)
+function actualInsert(soupName, entryShape, n, i) {
+    if (i < n) {
+        return storeClient
+            .upsertSoupEntries(STORE_CONFIG, soupName, [generateEntry(entryShape)])
+            .then(() => {
+                return actualInsert(soupName, entryShape, n, i+1)
+            })
+    }
+    else {
+        end(`+ ${soupName}`)
+    }
+}
+
+// Query all entries using the given pageSize
+function query(soupConfig, n, pageSize) {
+    var soupName = soupConfig.soupSpec.name
+    var query = {queryType: "smart", smartSql:`select {${soupName}:key}, {${soupName}:_soup} from {${soupName}}`, pageSize:pageSize}
+
+    start(`q ${soupName} ${pageSize}`)
+    return storeClient.runSmartQuery(STORE_CONFIG, query)
+        .then(cursor => {
+            return traverseResultSet(soupName, cursor)
+        })
+}
+
+// Helper for query(...)
+function traverseResultSet(soupName, cursor) {
+    if (cursor.currentPageIndex < cursor.totalPages - 1) {
+        return storeClient.moveCursorToNextPage(STORE_CONFIG, cursor)
+            .then(cursor => {
+                return traverseResultSet(soupName, cursor)
+            })
+    } else {
+        end(`q ${soupName} ${cursor.pageSize}`)
+    }
 }
 
 
-// Function returning rounded size in b, kb or mb
+// Return rounded size in b, kb or mb
 function roundedSize(size) {
     if (size < 1024) {
         return size + " b"
@@ -107,62 +157,15 @@ function roundedSize(size) {
     }
 }
 
-// Function returning approximate entry size as a string
-function getEntrySizeAsString(settings) {
-    return roundedSize(JSON.stringify(generateEntry(settings)).length)
-}
-
-
-function insert(settings, n, i, start, actuallyAdded) {
-    var entrySize = getEntrySizeAsString(settings)
-    i = i || 0
-    start = start || time()
-    actuallyAdded = actuallyAdded || 0
-
-    if (i == 0) {
-        log(`+ ${n} x ${entrySize}`, "blue")
-    }
-    
-    if (i < n) {
-        storeClient.upsertSoupEntries(STORE_CONFIG, SOUPNAME, [generateEntry()])
-            .then(() => { return onInsert(n, i+1, start, actuallyAdded+1) } )
-            .catch(() => { return onInsert(n, i+1, start, actuallyAdded) } )
-    }
-    else {
-        var elapsedTime = time() - start
-        log(`+ ${actuallyAdded} in ${elapsedTime} ms`, "green")
+// Helper function to generate entry
+function generateEntry(entryShape) {
+    return {
+        key: generateString(entryShape.keyLength),
+        value: generateObject(entryShape.depth, entryShape.numberOfChildren, entryShape.keyLength, entryShape.valueLength)
     }
 }
 
-// Function invoked when a btnQueryAll* button is pressed
-function onQueryAll(pageSize) {
-    var start = time()
-    log(`Q with page ${pageSize}`, "blue")
-    storeClient.runSmartQuery(STORE_CONFIG, {queryType: "smart", smartSql:SMART_QUERY, pageSize:pageSize})
-        .then(cursor => {
-            log(`Q matching ${cursor.totalEntries}`)
-            return traverseResultSet(cursor, cursor.currentPageOrderedEntries.length, start)
-        })
-}
-
-// Helper for onQueryAll to traverse the result set to the end and count number of records actually returned
-function traverseResultSet(cursor, countSeenSoFar, start) {
-    if (cursor.currentPageIndex < cursor.totalPages - 1) {
-        return storeClient.moveCursorToNextPage(STORE_CONFIG, cursor)
-            .then(cursor => {
-                return traverseResultSet(cursor, countSeenSoFar + cursor.currentPageOrderedEntries.length, start)
-            })
-    } else {
-        var elapsedTime = time() - start
-        log(`Q ${countSeenSoFar} in ${elapsedTime} ms`, "green")
-    }
-}
-
-// Helper function to generate object
-// @param depth
-// @param numberOfChildren
-// @param keyLength
-// @param valueLength
+// Helper for generateEntryGenerate object with given shape
 function generateObject(depth, numberOfChildren, keyLength, valueLength) {
     if (depth > 0) {
         var obj = {}
@@ -175,56 +178,42 @@ function generateObject(depth, numberOfChildren, keyLength, valueLength) {
     }
 }
 
-// Helper function to generate string of length l
-// @param l desired length
+// Generate string of length l
 function generateString(l) {
-    var minCodePoint = parseInt(settings.minCodePoint, 16)
-    var maxCodePoint = parseInt(settings.maxCodePoint, 16)
     return [...Array(l)].map(() => {
-        return String.fromCodePoint(Math.floor(Math.random() * (maxCodePoint+1-minCodePoint) + minCodePoint))
+        return String.fromCodePoint(Math.floor(Math.random() * (MAX_CODE_POINT+1-MIN_CODE_POINT) + MIN_CODE_POINT))
     }).join('')
 }
 
-// Helper function to return current time in ms
+// Return current time in ms
 function time() {
     return (new Date()).getTime()
 }
-*/
 
-// Helper function to clear screen
+// Clear console
 function clearLog() {
     document.querySelector('#ulConsole').innerHTML = ""
 }
 
-// Helper function to write output to screen
-// @param msg to write out
-// @param color (optional)
+// Log message to console
 function log(msg, color) {
-    var d = new Date()
-    var prefix = new Date().toISOString().slice(14, 23)
     msg = color ? msg.fontcolor(color) : msg
-    document.querySelector('#ulConsole').innerHTML = `<li class="table-view-cell"><div class="media-body">${prefix}: ${msg}</div></li>`
-        + document.querySelector('#ulConsole').innerHTML
+    var currentConsole = document.querySelector('#ulConsole').innerHTML
+    document.querySelector('#ulConsole').innerHTML = `<li class="table-view-cell"><div class="media-body">${msg}</div></li>${currentConsole}`
 }
 
-// Helper function to generate entry
-function generateEntry() {
-    try {
-        return {
-            key: generateString(settings.keyLength),
-            value: generateObject(settings.depth, settings.numberOfChildren, settings.keyLength, settings.valueLength)
-            
-        }
-    }
-    catch (err) {
-        log(`Could not generate entry: ${err.message}`, "red")
-        throw err
-    }
+// Capture start time
+function start(msg) {
+    events[msg] = time()
 }
 
+// Log message with elapsed time since start was called for msg
+function end(msg) {
+    var elapsedTime = time() - events[msg]
+    log(`[${elapsedTime} ms] ${msg}`, "green")
+}
 
 // main function
-// Sets up soups if needed
 function main() {
     document.addEventListener("deviceready", function () {
         // Watch for global errors
@@ -233,10 +222,10 @@ function main() {
         }
         // Connect buttons
         document.getElementById('btnReset').addEventListener("click", onReset)
-        document.getElementById('btnBenchSmall').addEventListener("click", () => { onBench(5) })
-        document.getElementById('btnBenchMedium').addEventListener("click", () => { onBench(100) })
-        document.getElementById('btnBenchLarge').addEventListener("click", () => { onBench(1000) })
-        document.getElementById('btnBenchExtraLarge').addEventListener("click", () => { onBench(5000) })
+        document.getElementById('btnBenchSmall').addEventListener("click", () => { onBench(8*1024) })
+        document.getElementById('btnBenchMedium').addEventListener("click", () => { onBench(128*1024) })
+        document.getElementById('btnBenchLarge').addEventListener("click", () => { onBench(1024*1024) })
+        document.getElementById('btnBenchExtraLarge').addEventListener("click", () => { onBench(8*1024*1024) })
                               
         // Get store client
         storeClient = cordova.require("com.salesforce.plugin.smartstore.client")
