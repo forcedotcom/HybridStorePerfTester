@@ -43,37 +43,23 @@ function setupSoup(soupConfig) {
     var rmMsg = `rm ${soupName}`
     var addMsg = `add ${soupName}`
         
-    start(rmMsg)
     return storeClient.removeSoup(STORE_CONFIG, soupName)
         .then(() => {
-            end(rmMsg)
-            start(addMsg)
             return storeClient.registerSoupWithSpec(STORE_CONFIG, soupConfig.soupSpec, soupConfig.indexSpecs)
-        })
-        .then(() => {
-            end(addMsg)
         })
 }
 
 // Setup all test soups
 function setupSoups() {
-    var msg = "create soups"
-    start(msg)
     return setupSoup(SOUP_CONFIGS.intString)
         .then(() => { return setupSoup(SOUP_CONFIGS.intJson1) })
         .then(() => { return setupSoup(SOUP_CONFIGS.extString) })
 }
 
-// Function invoked when a btnReset is pressed
-function onReset() {
-    clearLog()
-    setupSoups()
-}
-
 // Function invoked when a btnBench* is pressed
 function onBench(entrySize) {
     var n = TOTAL_SIZE / entrySize
-    log(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
+    resetResultTable(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
 
     var entryShape = {
         depth: 1,                      // depth of json objects
@@ -82,7 +68,9 @@ function onBench(entrySize) {
     }
     entryShape.valueLength = entrySize / Math.pow(entryShape.numberOfChildren, entryShape.depth) // length of leaf values
 
-    return insert(SOUP_CONFIGS.intString, entryShape, n)
+    return setupSoups()
+        // populate tables
+        .then(() => { return insert(SOUP_CONFIGS.intString, entryShape, n) })
         .then(() => { return insert(SOUP_CONFIGS.extString, entryShape, n) })
         .then(() => { return insert(SOUP_CONFIGS.intJson1, entryShape, n) })
         // query with page size 1
@@ -103,7 +91,7 @@ function onBench(entrySize) {
 // Insert n entries with the given shape in the given soup
 function insert(soupConfig, entryShape, n) {
     var soupName = soupConfig.soupSpec.name
-    start(`+ ${soupName}`)
+    startBench(`bench_${soupName}_ins`)
     return actualInsert(soupName, entryShape, n, 0)
 }
 
@@ -117,7 +105,7 @@ function actualInsert(soupName, entryShape, n, i) {
             })
     }
     else {
-        end(`+ ${soupName}`)
+        endBench(`bench_${soupName}_ins`)
     }
 }
 
@@ -126,7 +114,7 @@ function query(soupConfig, n, pageSize) {
     var soupName = soupConfig.soupSpec.name
     var query = {queryType: "smart", smartSql:`select {${soupName}:key}, {${soupName}:_soup} from {${soupName}}`, pageSize:pageSize}
 
-    start(`q ${soupName} ${pageSize}`)
+    startBench(`bench_${soupName}_q_${pageSize}`)
     return storeClient.runSmartQuery(STORE_CONFIG, query)
         .then(cursor => {
             return traverseResultSet(soupName, cursor)
@@ -141,7 +129,7 @@ function traverseResultSet(soupName, cursor) {
                 return traverseResultSet(soupName, cursor)
             })
     } else {
-        end(`q ${soupName} ${cursor.pageSize}`)
+        endBench(`bench_${soupName}_q_${cursor.pageSize}`)
     }
 }
 
@@ -190,27 +178,26 @@ function time() {
     return (new Date()).getTime()
 }
 
-// Clear console
-function clearLog() {
-    document.querySelector('#ulConsole').innerHTML = ""
+// Capture start time and show "running" in result table
+function startBench(id) {
+    events[id] = time()
+    document.querySelector(`#${id}`).innerHTML = 'running'.fontcolor('red')
 }
 
-// Log message to console
-function log(msg, color) {
-    msg = color ? msg.fontcolor(color) : msg
-    var currentConsole = document.querySelector('#ulConsole').innerHTML
-    document.querySelector('#ulConsole').innerHTML = `<li class="table-view-cell"><div class="media-body">${msg}</div></li>${currentConsole}`
+// Compute elapsed time and show in result table
+function endBench(id) {
+    var elapsedTime = time() - events[id]
+    document.querySelector(`#${id}`).innerHTML = `${elapsedTime}`
 }
 
-// Capture start time
-function start(msg) {
-    events[msg] = time()
-}
-
-// Log message with elapsed time since start was called for msg
-function end(msg) {
-    var elapsedTime = time() - events[msg]
-    log(`[${elapsedTime} ms] ${msg}`, "green")
+// Reset result table
+function resetResultTable(title) {
+    document.querySelector('#benchTitle').innerHTML = title
+    Object.keys(SOUP_CONFIGS).map((soupName) => {
+        ["ins", "q_1", "q_4", "q_16"].map((suffix) => {
+            document.querySelector(`#bench_${soupName}_${suffix}`).innerHTML = 'not run'
+        })
+    })
 }
 
 // main function
@@ -221,7 +208,6 @@ function main() {
             log(`windowError fired with ${message}`, "red")
         }
         // Connect buttons
-        document.getElementById('btnReset').addEventListener("click", onReset)
         document.getElementById('btnBenchSmall').addEventListener("click", () => { onBench(8*1024) })
         document.getElementById('btnBenchMedium').addEventListener("click", () => { onBench(128*1024) })
         document.getElementById('btnBenchLarge').addEventListener("click", () => { onBench(1024*1024) })
@@ -229,8 +215,8 @@ function main() {
                               
         // Get store client
         storeClient = cordova.require("com.salesforce.plugin.smartstore.client")
-        // Sets up soups - don't drop soups if it already exists
-        setupSoups(false)
+        // Rest result table
+        resetResultTable("BENCHMARK pick one")
     })
 }
 

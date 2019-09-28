@@ -7,23 +7,9 @@
     <link href="ratchet-theme.css" rel="stylesheet">
     <style>
         body, .bar-nav {
-            top: env(safe-area-inset-top)
+            top: env(safe-area-inset-top);
         }
-    
-        .hidden {
-            display: none
-        }
-    
-        #divSettings input{
-            width: 7em
-        }
-    
-        #divSettings label {
-            display: block;
-            float: left;
-            width: 9em;
-        }
-    
+
         html *
         {
            font-family: Courier !important;
@@ -36,15 +22,47 @@
 
     <!-- Header -->
     <header class="bar bar-nav">
-        <h1 class="title" id="headerTitle">Console</h1>
-        <button class="btn btn-negative pull-left" id="btnReset">Reset</button>
+        <h1 class="title" id="headerTitle">Hybrid Store Perf Tester</h1>
     </header>
     
     <div class="content">
 
-        <!-- Console -->
-        <ul id="ulConsole" class="table-view">
-        </ul>
+      <!-- Results -->
+      <div class="card">
+        <h3 id="benchTitle"></h3>
+        <table class="table-view">
+          <tr>
+            <th class="table-view-cell">ms</th>
+            <th class="table-view-cell">intString</th>
+            <th class="table-view-cell">extString</th>
+            <th class="table-view-cell">intJson1</th>
+          </tr>
+          <tr>
+            <th class="table-view-cell">ins</th>
+            <td class="table-view-cell" id="bench_intString_ins"></td>
+            <td class="table-view-cell" id="bench_extString_ins"></td>
+            <td class="table-view-cell" id="bench_intJson1_ins"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 1</th>
+            <td class="table-view-cell" id="bench_intString_q_1"></td>
+            <td class="table-view-cell" id="bench_extString_q_1"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_1"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 4</th>
+            <td class="table-view-cell" id="bench_intString_q_4"></td>
+            <td class="table-view-cell" id="bench_extString_q_4"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_4"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 16</th>
+            <td class="table-view-cell" id="bench_intString_q_16"></td>
+            <td class="table-view-cell" id="bench_extString_q_16"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_16"></td>
+          </tr>
+        </table>
+      </div>
 
     </div>
         
