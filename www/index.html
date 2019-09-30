@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <link href="ratchet.css" rel="stylesheet">
+    <link href="ratchet-theme.css" rel="stylesheet">
+    <style>
+        body, .bar-nav {
+            top: env(safe-area-inset-top);
+        }
+
+        html *
+        {
+           font-family: Courier !important;
+        }
+    </style>
+   <script src="cordova.js"></script>
+   <script src="app.js"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="bar bar-nav">
+        <h1 class="title" id="headerTitle">Hybrid Store Perf Tester</h1>
+    </header>
+    
+    <div class="content">
+
+      <!-- Results -->
+      <div class="card">
+        <h3 id="benchTitle"></h3>
+        <table class="table-view">
+          <tr>
+            <th class="table-view-cell">ms</th>
+            <th class="table-view-cell">intString</th>
+            <th class="table-view-cell">extString</th>
+            <th class="table-view-cell">intJson1</th>
+          </tr>
+          <tr>
+            <th class="table-view-cell">ins</th>
+            <td class="table-view-cell" id="bench_intString_ins"></td>
+            <td class="table-view-cell" id="bench_extString_ins"></td>
+            <td class="table-view-cell" id="bench_intJson1_ins"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 1</th>
+            <td class="table-view-cell" id="bench_intString_q_1"></td>
+            <td class="table-view-cell" id="bench_extString_q_1"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_1"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 4</th>
+            <td class="table-view-cell" id="bench_intString_q_4"></td>
+            <td class="table-view-cell" id="bench_extString_q_4"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_4"></td>
+          </tr>
+          <tr>
+            <th class="table-view-cell">q 16</th>
+            <td class="table-view-cell" id="bench_intString_q_16"></td>
+            <td class="table-view-cell" id="bench_extString_q_16"></td>
+            <td class="table-view-cell" id="bench_intJson1_q_16"></td>
+          </tr>
+        </table>
+      </div>
+
+    </div>
+        
+    <!-- Bottom bar -->
+    <nav class="bar bar-footer">
+      <!-- Buttons for main screen -->
+      <button class="btn pull-left" id="btnBenchSmall">Small</button>
+      <button class="btn pull-left" id="btnBenchMedium">Medium</button>
+      <button class="btn pull-right" id="btnBenchExtraLarge">Extra Large</button>
+      <button class="btn pull-right" id="btnBenchLarge">Large</button>
+    </nav>
+</body>
+</html>
