@@ -1,5 +1,9 @@
 // Constants
-const TOTAL_SIZE = 1024*1024*8 // total number of characters (in leaf values) written and read during a benchmark
+const TOTAL_SIZES_MB = {
+    SMALL: 8,
+    MEDIUM: 32,
+    LARGE: 128
+}
 
 // Store config for all soups
 const STORE_CONFIG =  {isGlobalStore:true}
@@ -36,6 +40,7 @@ const MAX_CODE_POINT = 0xFF
 // Global variables
 var storeClient    // client to do smartstore operations
 var events = {}    // map of message to start time
+var TOTAL_SIZE_MB  // total number of characters (in leaf values) written and read during a benchmark
 
 // Sets up a test soup
 function setupSoup(soupConfig) {
@@ -56,9 +61,24 @@ function setupSoups() {
         .then(() => { return setupSoup(SOUP_CONFIGS.extString) })
 }
 
+// Function invoked when top segmeted control is changed
+function setTotalSize(totalSizeMb) {
+    TOTAL_SIZE_MB = totalSizeMb
+    var sizes = [TOTAL_SIZES_MB.SMALL, TOTAL_SIZES_MB.MEDIUM, TOTAL_SIZES_MB.LARGE]
+    var activeIndex = sizes.indexOf(totalSizeMb)
+    var eltIds = ["anchorTotalSizeSmall", "anchorTotalSizeMedium", "anchorTotalSizeLarge"]
+    eltIds.forEach((eltId, i) => {
+        if (i == activeIndex) {
+            document.getElementById(eltId).classList.add('active')
+        } else {
+            document.getElementById(eltId).classList.remove('active')
+        }
+    })
+}
+
 // Function invoked when a btnBench* is pressed
 function onBench(entrySize) {
-    var n = TOTAL_SIZE / entrySize
+    var n = TOTAL_SIZE_MB*1024*1024 / entrySize
     resetResultTable(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
 
     var entryShape = {
@@ -205,18 +225,23 @@ function main() {
     document.addEventListener("deviceready", function () {
         // Watch for global errors
         window.onerror = (message, source, lineno, colno, error) => {
-            log(`windowError fired with ${message}`, "red")
+            alert(`windowError fired with ${message}`)
         }
         // Connect buttons
         document.getElementById('btnBenchSmall').addEventListener("click", () => { onBench(8*1024) })
         document.getElementById('btnBenchMedium').addEventListener("click", () => { onBench(128*1024) })
         document.getElementById('btnBenchLarge').addEventListener("click", () => { onBench(1024*1024) })
         document.getElementById('btnBenchExtraLarge').addEventListener("click", () => { onBench(8*1024*1024) })
-                              
+        document.getElementById('anchorTotalSizeSmall').addEventListener("click", () => { setTotalSize(TOTAL_SIZES_MB.SMALL) })
+        document.getElementById('anchorTotalSizeMedium').addEventListener("click", () => { setTotalSize(TOTAL_SIZES_MB.MEDIUM) })
+        document.getElementById('anchorTotalSizeLarge').addEventListener("click", () => { setTotalSize(TOTAL_SIZES_MB.LARGE) })
+
         // Get store client
         storeClient = cordova.require("com.salesforce.plugin.smartstore.client")
-        // Rest result table
+        // Reset result table
         resetResultTable("BENCHMARK pick one")
+        // Set total size
+        setTotalSize(TOTAL_SIZES_MB.SMALL)
     })
 }
 
