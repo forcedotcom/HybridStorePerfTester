@@ -41,16 +41,22 @@ const MAX_CODE_POINT = 0xFF
 var storeClient    // client to do smartstore operations
 var events = {}    // map of message to start time
 var TOTAL_SIZE_MB  // total number of characters (in leaf values) written and read during a benchmark
+var globalStatus = ''
 
 // Sets up a test soup
 function setupSoup(soupConfig) {
     var soupName = soupConfig.soupSpec.name
     var rmMsg = `rm ${soupName}`
     var addMsg = `add ${soupName}`
-        
+
+    setGlobalStatus(`Removing soup ${soupName}`)
     return storeClient.removeSoup(STORE_CONFIG, soupName)
         .then(() => {
+            setGlobalStatus(`Creating soup ${soupName}`)
             return storeClient.registerSoupWithSpec(STORE_CONFIG, soupConfig.soupSpec, soupConfig.indexSpecs)
+        })
+        .then(() => {
+            setGlobalStatus('')
         })
 }
 
@@ -78,6 +84,12 @@ function setTotalSize(totalSizeMb) {
 
 // Function invoked when a btnBench* is pressed
 function onBench(entrySize) {
+    // Prevent double runs
+    if (globalStatus !== '') {
+        console.log('Can\'t run benchmark - some operation already in progress')
+        return
+    }
+
     var n = TOTAL_SIZE_MB*1024*1024 / entrySize
     resetResultTable(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
 
@@ -90,10 +102,12 @@ function onBench(entrySize) {
 
     return setupSoups()
         // populate tables
+        .then(() => { setGlobalStatus('Doing writes') })
         .then(() => { return insert(SOUP_CONFIGS.intString, entryShape, n) })
         .then(() => { return insert(SOUP_CONFIGS.extString, entryShape, n) })
         .then(() => { return insert(SOUP_CONFIGS.intJson1, entryShape, n) })
         // query with page size 1
+        .then(() => { setGlobalStatus('Doing reads') })
         .then(() => { return query(SOUP_CONFIGS.intString, n, 1) })
         .then(() => { return query(SOUP_CONFIGS.extString, n, 1) })
         .then(() => { return query(SOUP_CONFIGS.intJson1, n, 1) })
@@ -105,7 +119,8 @@ function onBench(entrySize) {
         .then(() => { return query(SOUP_CONFIGS.intString, n, 16) })
         .then(() => { return query(SOUP_CONFIGS.extString, n, 16) })
         .then(() => { return query(SOUP_CONFIGS.intJson1, n, 16) })
-
+        // done
+        .then(() => { setGlobalStatus('') })
 }
 
 // Insert n entries with the given shape in the given soup
@@ -198,24 +213,30 @@ function time() {
     return (new Date()).getTime()
 }
 
+// Update global status
+function setGlobalStatus(status) {
+    globalStatus = status
+    document.getElementById('statusBar').innerHTML = status.fontcolor('red')
+}
+
 // Capture start time and show "running" in result table
 function startBench(id) {
     events[id] = time()
-    document.querySelector(`#${id}`).innerHTML = 'running'.fontcolor('red')
+    document.getElementById(`${id}`).innerHTML = 'running'.fontcolor('red')
 }
 
 // Compute elapsed time and show in result table
 function endBench(id) {
     var elapsedTime = time() - events[id]
-    document.querySelector(`#${id}`).innerHTML = `${elapsedTime}`
+    document.getElementById(`${id}`).innerHTML = `${elapsedTime}`
 }
 
 // Reset result table
 function resetResultTable(title) {
-    document.querySelector('#benchTitle').innerHTML = title
+    document.getElementById('benchTitle').innerHTML = title
     Object.keys(SOUP_CONFIGS).map((soupName) => {
         ["ins", "q_1", "q_4", "q_16"].map((suffix) => {
-            document.querySelector(`#bench_${soupName}_${suffix}`).innerHTML = 'not run'
+            document.getElementById(`bench_${soupName}_${suffix}`).innerHTML = 'not run'
         })
     })
 }
