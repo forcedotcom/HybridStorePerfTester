@@ -22,10 +22,16 @@
 
     <!-- Header -->
     <header class="bar bar-nav">
-        <h1 class="title" id="headerTitle">Hybrid Store Perf Tester</h1>
+      <h1 class="title" id="headerTitle">Hybrid Store Perf Tester</h1>
     </header>
     
     <div class="content">
+      <!-- Control to change total size being written / read -->
+      <div class="segmented-control">
+        <a class="control-item active" id="anchorTotalSizeSmall">8mb</a>
+        <a class="control-item" id="anchorTotalSizeMedium">32mb</a>
+        <a class="control-item" id="anchorTotalSizeLarge">128mb</a>
+      </div>
 
       <!-- Results -->
       <div class="card">
@@ -71,6 +77,7 @@
       <!-- Buttons for main screen -->
       <button class="btn pull-left" id="btnBenchSmall">Small</button>
       <button class="btn pull-left" id="btnBenchMedium">Medium</button>
+      <h1 class="title" id="statusBar"></h1>
       <button class="btn pull-right" id="btnBenchExtraLarge">Extra Large</button>
       <button class="btn pull-right" id="btnBenchLarge">Large</button>
     </nav>

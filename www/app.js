@@ -1,5 +1,9 @@
 // Constants
-const TOTAL_SIZE = 1024*1024*8 // total number of characters (in leaf values) written and read during a benchmark
+const TOTAL_SIZES_MB = {
+    SMALL: 8,
+    MEDIUM: 32,
+    LARGE: 128
+}
 
 // Store config for all soups
 const STORE_CONFIG =  {isGlobalStore:true}
@@ -36,29 +40,57 @@ const MAX_CODE_POINT = 0xFF
 // Global variables
 var storeClient    // client to do smartstore operations
 var events = {}    // map of message to start time
+var TOTAL_SIZE_MB  // total number of characters (in leaf values) written and read during a benchmark
+var globalStatus = ''
 
 // Sets up a test soup
 function setupSoup(soupConfig) {
     var soupName = soupConfig.soupSpec.name
     var rmMsg = `rm ${soupName}`
     var addMsg = `add ${soupName}`
-        
+
+    setGlobalStatus(`Removing soup ${soupName}`)
     return storeClient.removeSoup(STORE_CONFIG, soupName)
-        .then(() => {
+        .then(function() {
+            setGlobalStatus(`Creating soup ${soupName}`)
             return storeClient.registerSoupWithSpec(STORE_CONFIG, soupConfig.soupSpec, soupConfig.indexSpecs)
+        })
+        .then(function() {
+            setGlobalStatus('')
         })
 }
 
 // Setup all test soups
 function setupSoups() {
     return setupSoup(SOUP_CONFIGS.intString)
-        .then(() => { return setupSoup(SOUP_CONFIGS.intJson1) })
-        .then(() => { return setupSoup(SOUP_CONFIGS.extString) })
+        .then(function() { return setupSoup(SOUP_CONFIGS.intJson1) })
+        .then(function() { return setupSoup(SOUP_CONFIGS.extString) })
+}
+
+// Function invoked when top segmeted control is changed
+function setTotalSize(totalSizeMb) {
+    TOTAL_SIZE_MB = totalSizeMb
+    var sizes = [TOTAL_SIZES_MB.SMALL, TOTAL_SIZES_MB.MEDIUM, TOTAL_SIZES_MB.LARGE]
+    var activeIndex = sizes.indexOf(totalSizeMb)
+    var eltIds = ["anchorTotalSizeSmall", "anchorTotalSizeMedium", "anchorTotalSizeLarge"]
+    eltIds.forEach(function(eltId, i) {
+        if (i == activeIndex) {
+            document.getElementById(eltId).classList.add('active')
+        } else {
+            document.getElementById(eltId).classList.remove('active')
+        }
+    })
 }
 
 // Function invoked when a btnBench* is pressed
 function onBench(entrySize) {
-    var n = TOTAL_SIZE / entrySize
+    // Prevent double runs
+    if (globalStatus !== '') {
+        console.log('Can\'t run benchmark - some operation already in progress')
+        return
+    }
+
+    var n = TOTAL_SIZE_MB*1024*1024 / entrySize
     resetResultTable(`BENCHMARK ${n} x ${roundedSize(entrySize)}`)
 
     var entryShape = {
@@ -70,22 +102,25 @@ function onBench(entrySize) {
 
     return setupSoups()
         // populate tables
-        .then(() => { return insert(SOUP_CONFIGS.intString, entryShape, n) })
-        .then(() => { return insert(SOUP_CONFIGS.extString, entryShape, n) })
-        .then(() => { return insert(SOUP_CONFIGS.intJson1, entryShape, n) })
+        .then(function() { setGlobalStatus('Doing writes') })
+        .then(function() { return insert(SOUP_CONFIGS.intString, entryShape, n) })
+        .then(function() { return insert(SOUP_CONFIGS.extString, entryShape, n) })
+        .then(function() { return insert(SOUP_CONFIGS.intJson1, entryShape, n) })
         // query with page size 1
-        .then(() => { return query(SOUP_CONFIGS.intString, n, 1) })
-        .then(() => { return query(SOUP_CONFIGS.extString, n, 1) })
-        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 1) })
+        .then(function() { setGlobalStatus('Doing reads') })
+        .then(function() { return query(SOUP_CONFIGS.intString, n, 1) })
+        .then(function() { return query(SOUP_CONFIGS.extString, n, 1) })
+        .then(function() { return query(SOUP_CONFIGS.intJson1, n, 1) })
         // query with page size 4
-        .then(() => { return query(SOUP_CONFIGS.intString, n, 4) })
-        .then(() => { return query(SOUP_CONFIGS.extString, n, 4) })
-        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 4) })
+        .then(function() { return query(SOUP_CONFIGS.intString, n, 4) })
+        .then(function() { return query(SOUP_CONFIGS.extString, n, 4) })
+        .then(function() { return query(SOUP_CONFIGS.intJson1, n, 4) })
         // query with page size 16
-        .then(() => { return query(SOUP_CONFIGS.intString, n, 16) })
-        .then(() => { return query(SOUP_CONFIGS.extString, n, 16) })
-        .then(() => { return query(SOUP_CONFIGS.intJson1, n, 16) })
-
+        .then(function() { return query(SOUP_CONFIGS.intString, n, 16) })
+        .then(function() { return query(SOUP_CONFIGS.extString, n, 16) })
+        .then(function() { return query(SOUP_CONFIGS.intJson1, n, 16) })
+        // done
+        .then(function() { setGlobalStatus('') })
 }
 
 // Insert n entries with the given shape in the given soup
@@ -100,7 +135,7 @@ function actualInsert(soupName, entryShape, n, i) {
     if (i < n) {
         return storeClient
             .upsertSoupEntries(STORE_CONFIG, soupName, [generateEntry(entryShape)])
-            .then(() => {
+            .then(function() {
                 return actualInsert(soupName, entryShape, n, i+1)
             })
     }
@@ -116,7 +151,7 @@ function query(soupConfig, n, pageSize) {
 
     startBench(`bench_${soupName}_q_${pageSize}`)
     return storeClient.runSmartQuery(STORE_CONFIG, query)
-        .then(cursor => {
+        .then(function(cursor) {
             return traverseResultSet(soupName, cursor)
         })
 }
@@ -125,7 +160,7 @@ function query(soupConfig, n, pageSize) {
 function traverseResultSet(soupName, cursor) {
     if (cursor.currentPageIndex < cursor.totalPages - 1) {
         return storeClient.moveCursorToNextPage(STORE_CONFIG, cursor)
-            .then(cursor => {
+            .then(function(cursor) {
                 return traverseResultSet(soupName, cursor)
             })
     } else {
@@ -168,9 +203,11 @@ function generateObject(depth, numberOfChildren, keyLength, valueLength) {
 
 // Generate string of length l
 function generateString(l) {
-    return [...Array(l)].map(() => {
-        return String.fromCodePoint(Math.floor(Math.random() * (MAX_CODE_POINT+1-MIN_CODE_POINT) + MIN_CODE_POINT))
-    }).join('')
+    var s = ""
+    for (var i=0; i<l; i++) {
+        s+= String.fromCodePoint(Math.floor(Math.random() * (MAX_CODE_POINT+1-MIN_CODE_POINT) + MIN_CODE_POINT))
+    }
+    return s
 }
 
 // Return current time in ms
@@ -178,24 +215,30 @@ function time() {
     return (new Date()).getTime()
 }
 
+// Update global status
+function setGlobalStatus(status) {
+    globalStatus = status
+    document.getElementById('statusBar').innerHTML = status.fontcolor('red')
+}
+
 // Capture start time and show "running" in result table
 function startBench(id) {
     events[id] = time()
-    document.querySelector(`#${id}`).innerHTML = 'running'.fontcolor('red')
+    document.getElementById(`${id}`).innerHTML = 'running'.fontcolor('red')
 }
 
 // Compute elapsed time and show in result table
 function endBench(id) {
     var elapsedTime = time() - events[id]
-    document.querySelector(`#${id}`).innerHTML = `${elapsedTime}`
+    document.getElementById(`${id}`).innerHTML = `${elapsedTime}`
 }
 
 // Reset result table
 function resetResultTable(title) {
-    document.querySelector('#benchTitle').innerHTML = title
-    Object.keys(SOUP_CONFIGS).map((soupName) => {
-        ["ins", "q_1", "q_4", "q_16"].map((suffix) => {
-            document.querySelector(`#bench_${soupName}_${suffix}`).innerHTML = 'not run'
+    document.getElementById('benchTitle').innerHTML = title
+    Object.keys(SOUP_CONFIGS).map(function(soupName) {
+        ["ins", "q_1", "q_4", "q_16"].map(function(suffix) {
+            document.getElementById(`bench_${soupName}_${suffix}`).innerHTML = 'not run'
         })
     })
 }
@@ -204,19 +247,24 @@ function resetResultTable(title) {
 function main() {
     document.addEventListener("deviceready", function () {
         // Watch for global errors
-        window.onerror = (message, source, lineno, colno, error) => {
-            log(`windowError fired with ${message}`, "red")
+        window.onerror = function (message, source, lineno, colno, error) {
+            alert(`windowError fired with ${message}`)
         }
         // Connect buttons
-        document.getElementById('btnBenchSmall').addEventListener("click", () => { onBench(8*1024) })
-        document.getElementById('btnBenchMedium').addEventListener("click", () => { onBench(128*1024) })
-        document.getElementById('btnBenchLarge').addEventListener("click", () => { onBench(1024*1024) })
-        document.getElementById('btnBenchExtraLarge').addEventListener("click", () => { onBench(8*1024*1024) })
-                              
+        document.getElementById('btnBenchSmall').addEventListener("click", function() { onBench(8*1024) })
+        document.getElementById('btnBenchMedium').addEventListener("click", function() { onBench(128*1024) })
+        document.getElementById('btnBenchLarge').addEventListener("click", function() { onBench(1024*1024) })
+        document.getElementById('btnBenchExtraLarge').addEventListener("click", function() { onBench(8*1024*1024) })
+        document.getElementById('anchorTotalSizeSmall').addEventListener("click", function() { setTotalSize(TOTAL_SIZES_MB.SMALL) })
+        document.getElementById('anchorTotalSizeMedium').addEventListener("click", function() { setTotalSize(TOTAL_SIZES_MB.MEDIUM) })
+        document.getElementById('anchorTotalSizeLarge').addEventListener("click", function() { setTotalSize(TOTAL_SIZES_MB.LARGE) })
+
         // Get store client
         storeClient = cordova.require("com.salesforce.plugin.smartstore.client")
-        // Rest result table
+        // Reset result table
         resetResultTable("BENCHMARK pick one")
+        // Set total size
+        setTotalSize(TOTAL_SIZES_MB.SMALL)
     })
 }
 

@@ -7,6 +7,9 @@ else
     forcehybrid create --platform=ios,android --apptype=hybrid_local --appname=HybridStorePerfTester --packagename=com.salesforce.hybridstoreperftester --organization=Salesforce --outputdir=app
 fi
 
+echo "Copying www sources from ./www to ./app/www/"
+cp -r ./www/* ./app/www/
+
 echo "Copying www sources from ./www to ./app/platforms/ios/www/"
 cp -r ./www/* ./app/platforms/ios/www/
 
